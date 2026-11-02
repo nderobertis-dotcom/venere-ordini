@@ -5,6 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#6b3e26">
 <title>Caffetteria Venere – Ordini</title>
+<link rel="manifest" id="lnkManifest" href="manifest-cliente.webmanifest">
+<link rel="icon" id="lnkIcon" type="image/png" href="icone/cliente-32.png">
+<link rel="apple-touch-icon" id="lnkApple" href="icone/cliente-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" id="metaTitle" content="Venere">
+<script>
+// La stessa pagina fa da app cliente e da app bar: icona, nome e manifest cambiano con #bar
+if (location.hash === '#bar') {
+  document.getElementById('lnkManifest').href = 'manifest-bar.webmanifest';
+  document.getElementById('lnkIcon').href = 'icone/bar-32.png';
+  document.getElementById('lnkApple').href = 'icone/bar-180.png';
+  document.getElementById('metaTitle').content = 'Venere Bar';
+  document.title = 'Venere – Area bar';
+}
+</script>
 <style>
 :root{--bg:#f6f1ea;--card:#fff;--ink:#2a1d14;--muted:#7a6a5d;--line:#e6dccf;--brand:#6b3e26;--brand-2:#a8673f;--danger:#b23b3b;--radius:14px}
 *{box-sizing:border-box}
