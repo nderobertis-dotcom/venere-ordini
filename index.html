@@ -114,6 +114,22 @@ a{color:var(--brand)}
 .hb{height:8px;background:var(--brand-2);border-radius:0 4px 4px 0;min-width:2px}
 .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:1px}
 #tip{position:fixed;z-index:60;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:8px;pointer-events:none;display:none;white-space:nowrap}
+.lcat{padding:12px 12px 4px}
+.lcat-h{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.lcat-h .catname{flex:1;min-width:0;font-weight:700;color:var(--brand-2);text-transform:uppercase;letter-spacing:.5px;font-size:13px;background:var(--bg);border-color:transparent;padding:8px 10px}
+.lcat-h .cnt{font-size:12px;color:var(--muted);white-space:nowrap}
+.lrow{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line)}
+.lrow.off .lmain,.lrow.off .lprezzo{opacity:.5}
+.mvs{display:flex;flex-direction:column;gap:3px}
+.mv{width:32px;height:26px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--brand);font-size:15px;font-weight:700;cursor:pointer;line-height:1;padding:0}
+.mv:disabled{opacity:.25;cursor:default}
+.lcat-h .mv{height:34px}
+.lmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lmain input{padding:6px 8px;font-size:14px}
+.lmain select{font-size:12px;color:var(--muted);padding:4px 6px}
+.lprezzo{width:72px!important;flex:0 0 auto;padding:6px!important}
+.lattivo{display:flex;flex-direction:column;align-items:center;margin:0;font-size:10px;color:var(--muted)}
+.lattivo input{width:20px;height:20px;margin:0 0 2px}
 .logo{padding:10px;text-align:center}
 .logo img{display:block;width:100%;max-width:420px;height:auto;margin:0 auto}
 .logo.mini img{max-width:220px}
@@ -204,8 +220,8 @@ a{color:var(--brand)}
   </section>
 
   <section id="subListino" class="hidden">
-    <div class="notice">Prezzi e prodotti di esempio: sostituiscili con il listino reale. Ogni modifica si salva subito; i clienti la vedono al prossimo caricamento.</div>
-    <div class="card" style="overflow-x:auto"><table id="tListino"></table></div>
+    <div class="notice">Prezzi e prodotti di esempio: sostituiscili con il listino reale. Ogni modifica si salva subito; i clienti la vedono al prossimo caricamento.<br>Con <b>↑ ↓</b> scegli l'ordine delle categorie e dei prodotti: i clienti vedono il listino nello stesso ordine. Tocca il nome di una categoria per rinominarla.</div>
+    <div id="listinoCats"></div>
     <div class="card">
       <h2>Aggiungi prodotto</h2>
       <form id="fNuovo">
@@ -298,6 +314,16 @@ async function caricaCfg(){
   $('#nomeBar').textContent = cfg.nome_bar;
   document.querySelectorAll('.telBar').forEach(a => { a.textContent = cfg.telefono; a.href = 'tel:' + cfg.telefono.replace(/\s/g, ''); });
 }
+// Categorie nell'ordine scelto dal bar (impostazioni.cat_ordine); quelle nuove vanno in coda
+function categorieOrdinate(lista = menu){
+  const presenti = [...new Set(lista.map(m => m.cat))];
+  const pref = (cfg?.cat_ordine || []).filter(c => presenti.includes(c));
+  return [...pref, ...presenti.filter(c => !pref.includes(c))];
+}
+function menuOrdinato(lista = menu){
+  const cats = categorieOrdinate(lista);
+  return [...lista].sort((a, b) => cats.indexOf(a.cat) - cats.indexOf(b.cat) || a.ordine - b.ordine || a.nome.localeCompare(b.nome));
+}
 async function caricaMenu(){
   const {data, error} = await sb.from('menu').select('*').order('ordine').order('nome');
   if (error) throw error;
@@ -350,8 +376,8 @@ function renderCliente(){
     return;
   }
   $('#chiTxt').innerHTML = `${esc(profilo.nome)} — ${esc(profilo.ente)}<div class="muted">${esc(profilo.indirizzo)}${profilo.ufficio ? ' · ' + esc(profilo.ufficio) : ''}</div>`;
-  const disp = menu.filter(m => m.disp);
-  const cats = ['Tutto', ...new Set(disp.map(m => m.cat))];
+  const disp = menuOrdinato(menu.filter(m => m.disp));
+  const cats = ['Tutto', ...categorieOrdinate(disp)];
   if (!cats.includes(catAttiva)) catAttiva = 'Tutto';
   $('#cats').innerHTML = cats.map(c => `<button class="chip ${c===catAttiva?'on':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
   const lista = catAttiva === 'Tutto' ? disp : disp.filter(m => m.cat === catAttiva);
@@ -628,37 +654,102 @@ function apriSezione(s){
 }
 
 /* --- listino --- */
-async function renderListino(){
-  try { await caricaMenu(); } catch (e) { errore(e); }
-  const cats = [...new Set(menu.map(m => m.cat))];
+let listinoOccupato = false;
+async function renderListino(ricarica = true){
+  if (ricarica) { try { await Promise.all([caricaMenu(), caricaCfg()]); } catch (e) { errore(e); } }
+  const cats = categorieOrdinate(), tutti = menuOrdinato();
   $('#dlCat').innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
-  $('#tListino').innerHTML = `<tr><th>Prodotto</th><th class="col-cat">Categoria</th><th style="width:90px">€</th><th>Attivo</th><th></th></tr>` +
-    menu.map(m => `<tr>
-      <td><input type="text" data-f="nome" data-id="${m.id}" value="${esc(m.nome)}"></td>
-      <td class="col-cat"><input type="text" data-f="cat" data-id="${m.id}" value="${esc(m.cat)}" list="dlCat"></td>
-      <td><input type="number" step="0.05" min="0" data-f="prezzo" data-id="${m.id}" value="${m.prezzo.toFixed(2)}"></td>
-      <td><input type="checkbox" data-f="disp" data-id="${m.id}" ${m.disp?'checked':''}></td>
-      <td><button class="btn ghost small" data-del="${m.id}" aria-label="Elimina">✕</button></td></tr>`).join('');
+  $('#listinoCats').innerHTML = cats.map((c, ci) => {
+    const prod = tutti.filter(m => m.cat === c);
+    return `<div class="card lcat">
+      <div class="lcat-h">
+        <input type="text" class="catname" data-rencat="${esc(c)}" value="${esc(c)}" aria-label="Nome categoria">
+        <span class="cnt">${prod.length} prod.</span>
+        <button class="mv" data-mvcat="${ci}" data-dir="-1" ${ci === 0 ? 'disabled' : ''} aria-label="Sposta categoria in alto">↑</button>
+        <button class="mv" data-mvcat="${ci}" data-dir="1" ${ci === cats.length - 1 ? 'disabled' : ''} aria-label="Sposta categoria in basso">↓</button>
+      </div>
+      ${prod.map((m, i) => `<div class="lrow ${m.disp ? '' : 'off'}">
+        <div class="mvs">
+          <button class="mv" data-mvprod="${m.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Sposta su">↑</button>
+          <button class="mv" data-mvprod="${m.id}" data-dir="1" ${i === prod.length - 1 ? 'disabled' : ''} aria-label="Sposta giù">↓</button>
+        </div>
+        <div class="lmain">
+          <input type="text" data-f="nome" data-id="${m.id}" value="${esc(m.nome)}" aria-label="Nome prodotto">
+          <select data-f="cat" data-id="${m.id}" aria-label="Categoria">${cats.map(x => `<option ${x === c ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+        </div>
+        <input type="number" class="lprezzo" step="0.05" min="0" data-f="prezzo" data-id="${m.id}" value="${m.prezzo.toFixed(2)}" aria-label="Prezzo">
+        <label class="lattivo"><input type="checkbox" data-f="disp" data-id="${m.id}" ${m.disp ? 'checked' : ''}>attivo</label>
+        <button class="btn ghost small" data-del="${m.id}" aria-label="Elimina">✕</button>
+      </div>`).join('')}
+    </div>`;
+  }).join('') || '<div class="card empty">Nessun prodotto: aggiungine uno qui sotto.</div>';
 }
-$('#tListino').addEventListener('change', async e => {
-  const t = e.target, m = menu.find(x => x.id === t.dataset.id); if (!m) return;
-  const f = t.dataset.f; let v;
+const ultimoOrdine = cat => Math.max(0, ...menu.filter(m => m.cat === cat).map(m => m.ordine));
+async function salvaCatOrdine(cats){
+  const {error} = await sb.from('impostazioni').update({cat_ordine: cats}).eq('id', 1);
+  if (error) { errore(error); return false; }
+  cfg.cat_ordine = cats; return true;
+}
+$('#listinoCats').addEventListener('change', async e => {
+  const t = e.target;
+  if (t.dataset.rencat !== undefined) {                       // rinomina categoria
+    const vecchio = t.dataset.rencat, nuovo = t.value.trim();
+    if (!nuovo || nuovo === vecchio) { t.value = vecchio; return; }
+    const {error} = await sb.from('menu').update({cat: nuovo}).eq('cat', vecchio);
+    if (error) { errore(error); return renderListino(); }
+    const cats = categorieOrdinate().map(c => c === vecchio ? nuovo : c);
+    await salvaCatOrdine([...new Set(cats)]);
+    toast(menu.some(m => m.cat === nuovo) ? 'Categorie unite' : 'Categoria rinominata');
+    return renderListino();
+  }
+  const m = menu.find(x => x.id === t.dataset.id); if (!m) return;
+  const f = t.dataset.f; let v, extra = {};
   if (f === 'disp') v = t.checked;
   else if (f === 'prezzo') { v = parseFloat(t.value); if (isNaN(v) || v < 0) { t.value = m.prezzo.toFixed(2); return; } v = Math.round(v*100)/100; }
   else { v = t.value.trim(); if (!v) { t.value = m[f]; return; } }
-  const {error} = await sb.from('menu').update({[f]: v}).eq('id', m.id);
+  if (f === 'cat') extra.ordine = ultimoOrdine(v) + 1;        // spostato in un'altra categoria: va in fondo
+  const {error} = await sb.from('menu').update({[f]: v, ...extra}).eq('id', m.id);
   if (error) { errore(error); renderListino(); return; }
-  m[f] = v; toast('Listino salvato');
+  Object.assign(m, {[f]: v}, extra); toast('Listino salvato');
+  if (f === 'cat' || f === 'disp') renderListino(false);
+});
+$('#listinoCats').addEventListener('click', async e => {
+  const b = e.target.closest('[data-mvcat],[data-mvprod]');
+  if (!b || listinoOccupato) return;
+  listinoOccupato = true;
+  const dir = +b.dataset.dir;
+  try {
+    if (b.dataset.mvcat !== undefined) {
+      const cats = categorieOrdinate(), i = +b.dataset.mvcat, j = i + dir;
+      if (j < 0 || j >= cats.length) return;
+      [cats[i], cats[j]] = [cats[j], cats[i]];
+      if (await salvaCatOrdine(cats)) renderListino(false);
+    } else {
+      const m = menu.find(x => x.id === b.dataset.mvprod); if (!m) return;
+      const prod = menuOrdinato().filter(x => x.cat === m.cat);
+      const i = prod.indexOf(m), j = i + dir;
+      if (j < 0 || j >= prod.length) return;
+      [prod[i], prod[j]] = [prod[j], prod[i]];
+      const modifiche = prod.map((p, k) => ({p, o: k + 1})).filter(x => x.p.ordine !== x.o);   // rinumera 1..n la categoria
+      const res = await Promise.all(modifiche.map(x => sb.from('menu').update({ordine: x.o}).eq('id', x.p.id)));
+      const err = res.find(r => r.error);
+      if (err) { errore(err.error); return renderListino(); }
+      modifiche.forEach(x => x.p.ordine = x.o);
+      renderListino(false);
+    }
+  } finally { listinoOccupato = false; }
 });
 $('#fNuovo').onsubmit = async e => {
   e.preventDefault(); const f = e.target;
-  const ordine = Math.max(0, ...menu.map(m => m.ordine)) + 1;
-  const {error} = await sb.from('menu').insert({nome:f.nome.value.trim(), cat:f.cat.value.trim(), prezzo:Math.round(parseFloat(f.prezzo.value)*100)/100, ordine});
+  const cat = f.cat.value.trim();
+  const {error} = await sb.from('menu').insert({nome:f.nome.value.trim(), cat, prezzo:Math.round(parseFloat(f.prezzo.value)*100)/100, ordine: ultimoOrdine(cat) + 1});
   if (error) return errore(error);
+  const cats = categorieOrdinate();
+  if (!cats.includes(cat)) await salvaCatOrdine([...cats, cat]);
   f.reset(); renderListino(); toast('Prodotto aggiunto');
 };
 async function eliminaProdotto(id){
-  if (!confirm('Eliminare il prodotto dal listino? Gli ordini passati restano invariati. Per toglierlo solo temporaneamente usa "Attivo".')) return;
+  if (!confirm('Eliminare il prodotto dal listino? Gli ordini passati restano invariati. Per toglierlo solo temporaneamente togli la spunta "attivo".')) return;
   const {error} = await sb.from('menu').delete().eq('id', id);
   if (error) return errore(error);
   renderListino();
