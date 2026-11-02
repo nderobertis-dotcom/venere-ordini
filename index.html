@@ -141,6 +141,7 @@ a{color:var(--brand)}
     <div class="chips" id="cats"></div>
     <div class="card" id="items"></div>
     <div id="mieiOrdini"></div>
+    <p style="text-align:center;margin-top:18px"><button class="linkbtn" id="cancellaDati">Cancella i miei dati da questo telefono</button></p>
   </section>
 </main>
 <div class="cartbar hidden" id="cartbar"><button id="openCart"><span id="cbQta"></span><span id="cbTot"></span></button></div>
@@ -473,6 +474,12 @@ $('#fProfilo').onsubmit = e => {
   save('vb_profilo', profilo); editProfilo = false; renderCliente();
 };
 $('#modProfilo').onclick = () => { editProfilo = true; renderCliente(); };
+$('#cancellaDati').onclick = () => {
+  if (!confirm('Cancellare da questo telefono i dati di consegna e l\'elenco dei tuoi ordini? Gli ordini già inviati al bar non vengono annullati.')) return;
+  ['vb_profilo', 'vb_miei', 'vb_codice'].forEach(del);
+  profilo = null; miei = []; mieiOrdini = []; carrello = {}; editProfilo = false;
+  renderCliente(); toast('Dati cancellati da questo telefono');
+};
 $('#annullaProfilo').onclick = () => { editProfilo = false; renderCliente(); };
 $('#openCart').onclick = async () => {
   await caricaCfg().catch(() => {});
